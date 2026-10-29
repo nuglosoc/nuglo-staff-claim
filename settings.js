@@ -2,7 +2,7 @@
 const CLAIM_SETTINGS = {
   mileageRate: 0.70,
   // Paste the Google Apps Script Web App /exec URL after deployment.
-  submitUrl: '',
+  submitUrl: 'https://script.google.com/macros/s/AKfycbxW_tITgC9evcV2LDNXMYlDYcnpHcaIV1XM4nNMkVQMQ0_sJ3QpcOUJPsmwJSv3XZFQqg/exec',
   staffNames: ['Amir Khalis', 'Aishah', 'Nur Syazwani', 'Emma Lee'],
   categories: ['Event/Project', 'Pantry', 'Office Use', 'Parking & Toll', 'Staff Meal', 'Others']
 };
