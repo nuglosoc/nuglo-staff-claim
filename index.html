@@ -542,45 +542,68 @@ function collect(){
 function buildPDF(){const items=collect();if(!items)return null;if(!window.jspdf||!window.jspdf.jsPDF){alert('PDF library not loaded. Please connect to the internet and reopen the HTML.');return;}const {jsPDF}=window.jspdf;const pdf=new jsPDF({unit:'mm',format:'a4'});const W=210,margin=15;const accent=[45,45,45];let y=16;function page(){pdf.addPage();y=18;}function ensure(h){if(y+h>277)page();}function txt(label,value){ensure(8);pdf.setFont('helvetica','bold');pdf.setFontSize(9);pdf.setTextColor(90);pdf.text(label,margin,y);pdf.setFont('helvetica','normal');pdf.setTextColor(20);const lines=pdf.splitTextToSize(String(value||'-'),110);pdf.text(lines,78,y);y+=Math.max(7,lines.length*4.8);}pdf.setFont('helvetica','bold');pdf.setFontSize(19);pdf.setTextColor(20);pdf.text('NUGLO  |  STAFF CLAIM',margin,23);pdf.setFontSize(10);pdf.setTextColor(95);pdf.text(claimType==='general'?'GENERAL EXPENSE CLAIM':'MILEAGE CLAIM',margin,30);y=39;txt('Staff Name',field('staffName'));txt('Designation',field('designation'));txt('Submission Date',new Date().toLocaleDateString('en-GB'));if(claimType==='mileage')txt('Mileage Rate','RM '+mileageRate.toFixed(2)+'/km');y+=5;ensure(15);pdf.setFont('helvetica','bold');pdf.setTextColor(...accent);pdf.setFontSize(12);pdf.text('CLAIM DETAILS',margin,y);y+=7;const columns=claimType==='general'?[{header:'#',dataKey:'no'},{header:'Date',dataKey:'date'},{header:'Merchant',dataKey:'merchant'},{header:'Item',dataKey:'purpose'},{header:'Category',dataKey:'category'},{header:'RM',dataKey:'amount'}]:[{header:'#',dataKey:'no'},{header:'Date',dataKey:'date'},{header:'Route / Stops',dataKey:'route'},{header:'Purpose',dataKey:'purpose'},{header:'KM',dataKey:'km'},{header:'RM',dataKey:'amount'}];const data=items.map((i,n)=>claimType==='general'?{no:n+1,date:fmtDate(i.date),merchant:i.merchant,purpose:i.purpose,category:i.category,amount:i.amount.toFixed(2)}:{no:n+1,date:fmtDate(i.date),route:[i.start,...i.stops,i.end].join(' > '),purpose:i.purpose,km:i.km.toFixed(1),amount:i.amount.toFixed(2)});pdf.autoTable({startY:y,columns,body:data,theme:'striped',styles:{fontSize:8,cellPadding:2.4,overflow:'linebreak'},headStyles:{fillColor:[65,65,65],textColor:[255,255,255]},margin:{left:margin,right:margin,bottom:18},columnStyles:{amount:{halign:'right'},no:{cellWidth:8}},didDrawPage:()=>{}});y=pdf.lastAutoTable.finalY+10;ensure(16);pdf.setFillColor(242,242,242);pdf.roundedRect(margin,y,180,14,2,2,'F');pdf.setFont('helvetica','bold');pdf.setTextColor(20);pdf.setFontSize(12);pdf.text('TOTAL CLAIM',margin+5,y+9);pdf.text(money(items.reduce((a,i)=>a+i.amount,0)),190,y+9,{align:'right'});y+=23;page();pdf.setFont('helvetica','bold');pdf.setFontSize(15);pdf.setTextColor(...accent);pdf.text('RECEIPT ATTACHMENTS',margin,y);y+=10;items.forEach((item,n)=>{const props=pdf.getImageProperties(item.receipt);const ratio=props.width/props.height;const iw=Math.min(180,170*ratio);const ih=iw/ratio;const h=Math.min(ih,190);const w=h*ratio;const label=claimType==='general'?item.merchant:[item.start,...item.stops,item.end].join(' > ');const caption=pdf.splitTextToSize('Receipt '+(n+1)+' | '+fmtDate(item.date)+' | '+label+' | '+money(item.amount),180);const captionHeight=caption.length*4.5;ensure(captionHeight+Math.min(h,190)+12);pdf.setFontSize(9);pdf.setFont('helvetica','bold');pdf.setTextColor(30);pdf.text(caption,margin,y);y+=captionHeight+3;const maxH=Math.min(h,255-y);const finalW=w*maxH/h;pdf.addImage(item.receipt,'JPEG',margin,y,finalW,maxH);y+=maxH+10;});const pages=pdf.internal.getNumberOfPages();for(let p=1;p<=pages;p++){pdf.setPage(p);pdf.setFontSize(8);pdf.setTextColor(125);pdf.text('Nuglo Staff Claim  |  Claim and receipt copy',margin,289);pdf.text(p+' / '+pages,195,289,{align:'right'});}return pdf;}
 function exportPDF(){const pdf=buildPDF();if(pdf)pdf.save('Nuglo_'+claimType+'_Claim_'+localToday()+'.pdf');}
 function printClaim(){const pdf=buildPDF();if(!pdf)return;pdf.autoPrint();const url=URL.createObjectURL(pdf.output('blob'));const w=window.open(url,'_blank');if(!w){alert('Please allow pop-ups to print the claim.');URL.revokeObjectURL(url);}else{setTimeout(()=>URL.revokeObjectURL(url),120000);}}
-// Submission uses a cross-origin HTML form and a one-time response nonce. No API key in public HTML.
+// Cross-origin upload via form; confirm independently through JSONP status polling.
+// Google Apps Script redirects make ordinary cross-origin fetch unsuitable here.
 let submitPending=null;
 function actionButtons(){
-  for (const id of ['submitBtn','mileageSubmitBtn']) {
-    const btn=$('#'+id);
-    btn.onclick=()=>submitClaim(btn);
-  }
-  $('#exportBtn').onclick=exportPDF;
-  $('#mileageExportBtn').onclick=exportPDF;
-  $('#printBtn').onclick=printClaim;
-  $('#mileagePrintBtn').onclick=printClaim;
+  for(const id of ['submitBtn','mileageSubmitBtn']) $('#'+id).onclick=()=>submitClaim($('#'+id));
+  $('#exportBtn').onclick=exportPDF;$('#mileageExportBtn').onclick=exportPDF;
+  $('#printBtn').onclick=printClaim;$('#mileagePrintBtn').onclick=printClaim;
 }
 function submitClaim(button){
   const endpoint=(typeof CLAIM_SETTINGS!=='undefined'&&CLAIM_SETTINGS.submitUrl)||'';
   if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(endpoint)){
-    alert('Submit is not configured yet. Add your deployed Google Apps Script URL to submitUrl in settings.js.');return;
+    alert('Submit is not configured. Set submitUrl in settings.js.');return;
   }
-  if(submitPending){alert('A submission is already in progress.');return;}
+  if(submitPending){alert('Submission already in progress.');return;}
   const pdf=buildPDF();if(!pdf)return;
   const pdfData=pdf.output('datauristring').split(',')[1];
-  if(pdfData.length>10.7*1024*1024){alert('PDF too large to submit (maximum 8 MB). Reduce receipt image sizes.');return;}
-  const nonce=Array.from(crypto.getRandomValues(new Uint8Array(20)),b=>b.toString(16).padStart(2,'0')).join('');
+  if(pdfData.length>10.7*1024*1024){alert('PDF too large to submit (maximum 8 MB).');return;}
+  const staff=field('staffName');
+  // Reuse the same ID for a repeated attempt of an unchanged PDF within this browser tab.
+  const fingerprint=[staff,claimType,pdfData.length,pdfData.slice(0,120),pdfData.slice(-120)].join('|');
+  const stored=sessionStorage.getItem('nuglo_pending_claim');
+  let pending;try{pending=JSON.parse(stored||'null');}catch(_){pending=null;}
+  const nonce=pending&&pending.fingerprint===fingerprint?pending.nonce:
+    Array.from(crypto.getRandomValues(new Uint8Array(20)),b=>b.toString(16).padStart(2,'0')).join('');
+  sessionStorage.setItem('nuglo_pending_claim',JSON.stringify({fingerprint,nonce}));
   const iframe=document.createElement('iframe');iframe.name='nuglo_upload_'+nonce;iframe.style.display='none';document.body.appendChild(iframe);
   const form=document.createElement('form');form.method='POST';form.action=endpoint;form.target=iframe.name;form.style.display='none';
-  const params={nonce,staff:field('staffName'),claimType,filename:'Nuglo_'+claimType+'_'+localToday()+'.pdf',pdfBase64:pdfData};
+  const params={nonce,staff,claimType,pdfBase64:pdfData};
   Object.entries(params).forEach(([key,value])=>{const input=document.createElement('input');input.type='hidden';input.name=key;input.value=value;form.appendChild(input);});
   document.body.appendChild(form);
   button.disabled=true;button.textContent='Submitting...';
-  const cleanup=()=>{clearTimeout(submitPending.timer);window.removeEventListener('message',receive);form.remove();setTimeout(()=>iframe.remove(),1000);submitPending=null;button.disabled=false;button.textContent='Submit';};
+  let finished=false,requestInFlight=false;
+  const cleanup=()=>{clearInterval(submitPending.poll);clearTimeout(submitPending.timer);window.removeEventListener('message',receive);form.remove();setTimeout(()=>iframe.remove(),1000);submitPending=null;button.disabled=false;button.textContent='Submit';};
+  const finish=(result)=>{
+    if(finished)return;finished=true;cleanup();
+    if(result.ok){sessionStorage.removeItem('nuglo_pending_claim');alert('Claim successfully saved to Google Drive. File: '+result.filename);}
+    else alert('Submission failed: '+(result.error||'Unknown error')+'\nPlease check Google Drive before retrying.');
+  };
   const receive=(event)=>{
-    if(!submitPending||!event.data||event.data.type!=='NUGLO_CLAIM_SUBMISSION'||event.data.nonce!==nonce)return;
-    // One-time nonce ties the response to this submission. No success is shown before server acknowledgement.
-    const result=event.data;cleanup();
-    if(result.ok)alert('Claim successfully saved to Google Drive. File: '+result.filename);
-    else alert('Submission failed: '+(result.error||'Unknown error')+'\nYou can still use Export as PDF.');
+    if(!event.data||event.data.type!=='NUGLO_CLAIM_SUBMISSION'||event.data.nonce!==nonce)return;
+    if(event.data.ok)finish(event.data);
+    // A failed upload can race with a successful previous attempt: status poll decides.
   };
   window.addEventListener('message',receive);
-  submitPending={timer:setTimeout(()=>{cleanup();alert('No confirmation from Google Drive. Please check the folder before trying again to avoid duplicate claims.');},90000)};
-  try{form.submit();}catch(e){cleanup();alert('Could not send claim: '+e.message);}
+  const poll=()=>{
+    if(finished||requestInFlight)return;
+    requestInFlight=true;
+    const script=document.createElement('script');
+    const callback='nugloStatus_'+nonce;
+    let timeout;
+    const done=()=>{clearTimeout(timeout);script.remove();delete window[callback];requestInFlight=false;};
+    window[callback]=(result)=>{done();if(result&&result.nonce===nonce&&result.saved)finish({ok:true,filename:result.filename});};
+    script.onerror=done;
+    timeout=setTimeout(done,7000);
+    script.src=endpoint+'?action=status&nonce='+encodeURIComponent(nonce)+'&callback='+callback+'&t='+Date.now();
+    document.head.appendChild(script);
+  };
+  submitPending={poll:setInterval(poll,2500),timer:setTimeout(()=>{
+    if(finished)return;finished=true;cleanup();
+    alert('Could not confirm submission. Check Google Drive before retrying. The same claim ID will be reused to prevent duplicates.');
+  },45000)};
+  try{form.submit();setTimeout(poll,1600);}catch(e){finished=true;cleanup();alert('Could not send claim: '+e.message);}
 }
 actionButtons();
 $('#f_subdate').value=new Date().toLocaleDateString('en-GB');$('#mf_subdate').value=new Date().toLocaleDateString('en-GB');addItemRow();addMileageRow();switchType('general');
