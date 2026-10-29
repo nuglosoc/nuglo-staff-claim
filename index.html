@@ -287,7 +287,7 @@ td input,td select{padding:7px;font-size:.83rem}
       <input id="mf_subdate" type="text" disabled style="margin-bottom: 16px; background: var(--bg); max-width: 200px;">
     </div>
     
-    <p style="margin:0 0 12px;color:var(--muted);font-size:.9rem">Mileage Rate: <strong id="displayMileageRate">RM 0.70/km</strong></p><h4 class="desktop-only" style="margin: 0 0 8px; font-size:0.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em;">Trip Details</h4>
+    <h4 class="desktop-only" style="margin: 0 0 8px; font-size:0.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em;">Trip Details</h4>
     <div id="mileageBody" class="items-container"></div>
     <button class="add-row btn-neutral" id="addMileageRowBtn" style="margin-top: 12px; width:100%; border:1px dashed var(--accent); color:var(--accent); background:transparent;">+ Add Trip</button>
     
@@ -583,5 +583,5 @@ function submitClaim(button){
   try{form.submit();}catch(e){cleanup();alert('Could not send claim: '+e.message);}
 }
 actionButtons();
-$('#displayMileageRate').textContent='RM '+mileageRate.toFixed(2)+'/km';$('#f_subdate').value=new Date().toLocaleDateString('en-GB');$('#mf_subdate').value=new Date().toLocaleDateString('en-GB');addItemRow();addMileageRow();switchType('general');
+$('#f_subdate').value=new Date().toLocaleDateString('en-GB');$('#mf_subdate').value=new Date().toLocaleDateString('en-GB');addItemRow();addMileageRow();switchType('general');
 </script></body></html>
